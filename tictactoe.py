@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+import os.path
 
 BOARD_ROWS = 3
 BOARD_COLS = 3
@@ -69,6 +70,17 @@ class State:
         new_state.hash()
         return new_state
 
+    def print_state(self):
+        print('--------')
+        for i in range(BOARD_ROWS):
+            str = " "
+            for j in range(BOARD_COLS):
+                if self.data[i, j] == 1:
+                    str += "  1 "
+                elif self.data[i, j] == -1:
+                    str += " -1 "
+            print(str)
+
 
 class Player:
     def __init__(self, symbol, epsilon=0.01):
@@ -88,43 +100,85 @@ class Player:
                     pass
 
 
-all_states = []
-
-
-def get_all_states_impl(state, symbol, print_status=False):
+def get_all_states_impl(state, symbol, all_states, print_status=False):
     for i in range(BOARD_ROWS):
         for j in range(BOARD_COLS):
             if print_status:
                 print(f'{i}{j}')
             if state.data[i, j] == 0:
                 new_state = state.next_state(i, j, symbol)
-                all_states.append(new_state.hash())
-                if new_state.is_end():
-                    return
-                else:
-                    get_all_states_impl(new_state, -symbol)
+                is_end = new_state.is_end()
+                all_states[new_state.hash()] = (new_state, is_end)
+                if not is_end:
+                    get_all_states_impl(new_state, -symbol, all_states)
 
 
 def get_all_states():
-    state = State()
-    all_states.append(state.hash())
-    symbol = 1
-    get_all_states_impl(state, symbol, print_status=True)
+    # pass
+    if os.path.isfile('all_states.bin'):
+        with open('all_states.bin','rb') as f:
+            return pickle.load(f)
+    else:
+        state = State()
+        hash_value = state.hash()
+        all_states = dict()
+        all_states[hash_value] = (state, state.is_end())  # is_end()에서  winner와 end 여부를 결정
+        symbol = 1
+        get_all_states_impl(state, symbol, all_states, print_status=True)
 
 
-astate = State()
+class Player:
+    def __init__(self,step_size=0.1, epsilon=0.1):
+        #step_size, epsilon, estimation, 경험하는 states와 greedy 여부, symbol정의
+        self.estimations=dict()
+        self.step_size=step_size
+        self.epsilon=epsilon
+        self.states=[]
+        self.greedy=[]
+        self.symbol=None
 
-s = np.array([[1, 0, 1], [-1, 0, -1], [1, 1, -1]])
-astate.data = s
+    def reset(self):
+        #stetes, greedy 재초기화
+        self.states=[]
+        self.greedy=[]
+        # pass
 
-# print(f"End?{astate.is_end()}, Winner{astate.winner}")
+    def set_state(self,state):
+        self.states.append(state)
+        self.greedy.append(True)
+        #state와 greedy(디폴트 T)를 추가
+        # pass
 
-get_all_states()
+    def set_symbol(self,symbol):
+        #symbol을 초기화, value를 초기화, win=1, lose 0, tie or undetermined 0.5
+        self.symbol=symbol # TODO __init__으로 보내면?
+        for state in all:
+            pass
+        # pass
 
-print(len(all_states))
-import math
+    def backup(self):
+        #한 게임이 끝난후에 greedy move 에 대해서 td update
+        pass
+    def act(self):
+        #가능한 포지션과 state를 구하고 epsilon확률로 탐험함. greedy여부를 결정하고
+        #[[i,j],T/F] 형태의 action 을 리턴함.
+        pass
+    def save_policy(self):
+        #value 함수 저장
+        pass
+    def load_policy(self):
+        #value 함수 로드
+        pass
 
-print(f'{len(all_states)} of {math.factorial(9)}(9!) are ended before 9 moves')
+file=open('all_states.bin','rb')
+all=pickle.load(file)
 
-all_states_unique = set(all_states)
-print(len(all_states_unique))
+# print(len(all))
+a=State()
+a.data=np.array([[1,1,1],[0,-1,1],[1,0,1]])
+a.print_state()
+
+
+
+
+
