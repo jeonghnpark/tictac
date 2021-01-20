@@ -91,14 +91,12 @@ class Player:
 all_states = []
 
 
-def get_all_states_impl(state, symbol):
+def get_all_states_impl(state, symbol, print_status=False):
     for i in range(BOARD_ROWS):
         for j in range(BOARD_COLS):
-            # print(f'{i}{j}')
+            if print_status:
+                print(f'{i}{j}')
             if state.data[i, j] == 0:
-                # next_hash = state.hash_value * 3 + symbol + 1
-                # if next_hash not in all_states:
-                #     print('new state found')
                 new_state = state.next_state(i, j, symbol)
                 all_states.append(new_state.hash())
                 if new_state.is_end():
@@ -111,7 +109,7 @@ def get_all_states():
     state = State()
     all_states.append(state.hash())
     symbol = 1
-    get_all_states_impl(state, symbol)
+    get_all_states_impl(state, symbol, print_status=True)
 
 
 astate = State()
