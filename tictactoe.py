@@ -1,13 +1,13 @@
 import numpy as np
 import pickle
 import os.path
-import random
+# import random
 
 BOARD_ROWS = 3
 BOARD_COLS = 3
 BOARD_SIZE = BOARD_COLS * BOARD_ROWS
 
-random.seed(42)
+np.random.seed(42)
 
 
 class State:
@@ -219,8 +219,8 @@ class Player:
                     next_states_hash.append(recent_state.next_state(i, j, self.symbol).hash())
                     next_position.append([i, j])
 
-        if np.random.randn() < self.epsilon:
-            select = random.randint(0, len(next_states_hash) - 1)
+        if np.random.rand() < self.epsilon:
+            select = np.random.randint(len(next_states_hash))
             self.greedy[-1] = False
             action = next_position[select]
             action.append(self.symbol)
@@ -279,7 +279,7 @@ def train(epochs, print_every=500):
     win_cnt1 = 0
     win_cnt2 = 0
 
-    for i in range(epochs):
+    for i in range(1,epochs+1):
         p1.reset()
         p2.reset()
         winner = judger.play(print_state=False)
@@ -289,7 +289,7 @@ def train(epochs, print_every=500):
             win_cnt2 += 1
 
         if i % print_every == 0:
-            print(f'epoch {i}, player1 win rate={win_cnt1 / (i + 1):.2f}, player2 win rate={win_cnt2 / (i + 1):.2f}')
+            print(f'epoch {i}, player1 win rate={win_cnt1 / (i):.2f}, player2 win rate={win_cnt2 / (i):.2f}')
         p1.backup()
         p2.backup()
 
@@ -341,5 +341,5 @@ if __name__ == "__main__":
         with open("all_states.bin", 'wb') as f:
             pickle.dump(all_states, f)
 
-    train(int(1e5))
+    train(int(100000), print_every=500)
     # compete(int(1e3))
