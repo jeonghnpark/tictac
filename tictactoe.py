@@ -69,7 +69,6 @@ class State:
         new_state = State()
         new_state.data = np.copy(self.data)
         new_state.data[i, j] = symbol
-        # TODO hash value를 업데이트 하지 않아도 되나?
         new_state.hash()
         return new_state
 
@@ -85,23 +84,54 @@ class State:
             print(str)
 
 
-class Player:
-    def __init__(self, symbol, epsilon=0.01):
-        self.symbol = symbol
-        self.states = []  # list that saves history of player's states
-        self.greedy = []  # list that saves history of its moves
-        self.epsilon = epsilon
-        self.estimation = dict()
 
-    def act(self):
-        # return action, the next moving position (i,j), a tuple
-        state = self.states[-1]
-        next_states = []  # hash values of possible next states
-        next_positions = []  # possible next position
-        for i in range(BOARD_ROWS):
-            for j in range(BOARD_COLS):
-                if state.data[i, j] == 0:
-                    pass
+class Judger:
+    def __init__(self, player1, player2):
+        self.p1 = player1
+        self.p2 = player2
+        self.p1_symbol = 1
+        self.p2_symbol = -1
+        self.p1.set_symbol(self.p1_symbol)
+        self.p2.set_symbol(self.p2_symbol)
+        self.current_player = None
+        self.current_state = State()
+
+    def reset(self):
+        """
+        reset players' states and greedy
+        """
+        self.p1.reset()
+        self.p2.reset()
+
+    def alternate(self):
+        '''yield each player alternatively'''
+        while True:
+            yield self.p1
+            yield self.p2
+
+    def play(self, print_state=False):
+        """
+        play one game until end
+        :param print_state:
+        :return: winner 1 or -1
+        """
+        alternator = self.alternate()
+        self.reset()
+        current_state = State()
+        self.p1.set_state(current_state)
+        self.p2.set_state(current_state)
+        if print_state:
+            current_state.print_state()
+        while True:
+            player = next(alternator)
+            i, j, symbol = player.act()
+            current_state = current_state.next_state(i, j, symbol)
+            self.p1.set_state(current_state)
+            self.p2.set_state(current_state)
+            if print_state:
+                current_state.print_state()
+            if current_state.is_end():
+                return current_state.winner
 
 
 def get_all_states_impl(state, symbol, all_states, print_status=False):
@@ -132,7 +162,7 @@ def get_all_states():
 
 
 class Player:
-    def __init__(self, step_size=0.1, epsilon=0.1):
+    def __init__(self, all_states, step_size=0.1, epsilon=0.1):
         # step_size, epsilon, estimation, 경험하는 states와 greedy 여부, symbol정의
         self.estimations = dict()
         self.step_size = step_size
@@ -173,6 +203,7 @@ class Player:
         hashes = [state.hash() for state in self.states]
         for i in reversed(range(len(hashes) - 1)):
             if self.greedy[i]:
+                # V(S_t) <- V(S_t)+alpha*(V(S_t+1)-V(S_t))
                 self.estimations[hashes[i]] += self.step_size * (
                         self.estimations[hashes[i + 1]] - self.estimations[hashes[i]])
 
@@ -189,50 +220,126 @@ class Player:
                     next_position.append([i, j])
 
         if np.random.randn() < self.epsilon:
-            select = random.randint(0,len(next_states_hash)-1)
+            select = random.randint(0, len(next_states_hash) - 1)
             self.greedy[-1] = False
-            action=next_position[select]
+            action = next_position[select]
             action.append(self.symbol)
             return action
 
-        #greedy move
-        values=[]
-        for next_state_hash, position in zip(next_states_hash,next_position):
-            values.append((self.estimations[next_state_hash],next_position))
+        # greedy move
+        values = []
+        for hash_val, position in zip(next_states_hash, next_position):
+            values.append((self.estimations[hash_val], position))
 
         np.random.shuffle(values)
-        values.sort(key=lambda x:x[0],reverse=True)
-        action=values[0][1]
+        values.sort(key=lambda x: x[0], reverse=True)
+        action = values[0][1]
         action.append(self.symbol)
         return action
 
-
-
-
     def save_policy(self):
         # value 함수 저장
-        pass
+        with open(f"policy_{'first' if self.symbol == 1 else 'second'}.bin", 'wb') as f:
+            pickle.dump(self.estimations, f)
 
     def load_policy(self):
         # value 함수 로드
+        with open(f"policy_{'first' if self.symbol == 1 else 'second'}.bin", 'rb') as f:
+            self.estimations = pickle.load(f)
+
+
+class HumanPlayer:
+    def __init__(self, **kwargs):
+        self.symbol = None
+        self.keys = ['q', 'w', 'e', 'a', 's', 'd', 'z', 'x', 'c']
+        self.state = None
+
+    def reset(self):
         pass
+
+    def set_state(self, state):
+        self.state = state
+
+    def set_symbol(self, symbol):
+        self.symbol = symbol
+
+    def act(self):
+        self.state.print_state()
+        key = input("Input your position")
+        data = self.keys.index(key)
+        i = data // BOARD_COLS
+        j = data % BOARD_COLS
+        return i, j, self.symbol
+
+
+def train(epochs, print_every=500):
+    p1 = Player(step_size=0.1, epsilon=0.01, all_states=all_states)
+    p2 = Player(step_size=0.1, epsilon=0.01, all_states=all_states)
+    judger = Judger(p1, p2)  # symbol is set in Judger.__init__()
+    win_cnt1 = 0
+    win_cnt2 = 0
+
+    for i in range(epochs):
+        p1.reset()
+        p2.reset()
+        winner = judger.play(print_state=False)
+        if winner == 1:
+            win_cnt1 += 1
+        elif winner == -1:
+            win_cnt2 += 1
+
+        if i % print_every == 0:
+            print(f'epoch {i}, player1 win rate={win_cnt1 / (i + 1):.2f}, player2 win rate={win_cnt2 / (i + 1):.2f}')
+        p1.backup()
+        p2.backup()
+
+    p1.save_policy()
+    p2.save_policy()
+
+
+def compete(turns):
+    p1 = Player(epsilon=0, all_states=all_states)  # epsilon=0 always greedy move
+    p2 = Player(epsilon=0, all_states=all_states)
+
+    judger = Judger(p1, p2)  # symbol is set in Judger.__init__()
+    p1.load_policy()
+    p2.load_policy()
+
+    win_cnt1 = 0
+    win_cnt2 = 0
+
+    for i in range(turns):
+        p1.reset()  # judge can be modified externally !!
+        p2.reset()
+        winner = judger.play(print_state=False)
+        if winner == 1:
+            win_cnt1 += 1
+        elif winner == -1:
+            win_cnt2 += 1
+    print(f"{turns} turns, player1 rate ={win_cnt1 / turns}, player2 rate={win_cnt2 / turns}")
+
+
+def play():
+    """
+    human vs machine
+    :return:
+    """
+    pass
 
 
 import os.path
 
-all_states = dict()
-if os.path.isfile("all_states.bin"):
-    with open("all_states.bin", 'rb') as f:
-        all_states = pickle.load(f)
-else:
-    get_all_states()
-    with open("all_states.bin", 'wb') as f:
-        pickle.dump(all_states, f)
 
-# file=open('all_states.bin','rb')
-# all=pickle.load(file)
+if __name__ == "__main__":
 
-# print(len(all))
-# a=State()
-# a.data=np.array([[1,1,1],[0,-1,1],[1,0,1]])
-# a.print_state()
+    all_states = dict()
+    if os.path.isfile("all_states.bin"):
+        with open("all_states.bin", 'rb') as f:
+            all_states = pickle.load(f)
+    else:
+        get_all_states()
+        with open("all_states.bin", 'wb') as f:
+            pickle.dump(all_states, f)
+
+    train(int(1e5))
+    # compete(int(1e3))
